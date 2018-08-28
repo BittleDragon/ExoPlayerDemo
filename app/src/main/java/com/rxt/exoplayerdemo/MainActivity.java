@@ -5,6 +5,7 @@ import android.content.ContentResolver;
 import android.content.DialogInterface;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
+import android.net.Uri;
 import android.os.Bundle;
 import android.provider.MediaStore;
 import android.support.v4.app.ActivityCompat;
@@ -35,9 +36,15 @@ public class MainActivity extends AppCompatActivity implements DialogInterface.O
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        printSomething();
         ButterKnife.bind(this);
         initRecycler();
         checkPermissionNecessary();
+    }
+
+    private void printSomething() {
+        float fontScale = getResources().getConfiguration().fontScale;
+        Log.d(TAG, "fontScale: " + fontScale);
     }
 
     private void initRecycler() {
@@ -45,6 +52,16 @@ public class MainActivity extends AppCompatActivity implements DialogInterface.O
         rvMusicList.addItemDecoration(new DividerItemDecoration(this, DividerItemDecoration.VERTICAL));
         mAdapter = new MusicListAdapter();
         rvMusicList.setAdapter(mAdapter);
+        mAdapter.setOnItemClickListener(new MusicListAdapter.OnItemClickListener() {
+            @Override
+            public void onItemClick(Uri musicUri) {
+                playMusic(musicUri);
+            }
+        });
+    }
+
+    private void playMusic(Uri musicUri) {
+
     }
 
     private void checkPermissionNecessary() {
@@ -84,7 +101,7 @@ public class MainActivity extends AppCompatActivity implements DialogInterface.O
     }
 
     private void loadData() {
-        List<String> musicNames = new ArrayList<>();
+        List<Music> musicList = new ArrayList<>();
         ContentResolver contentResolver = getContentResolver();
         Cursor cursor = contentResolver.query(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
                 null, null, null, null);
@@ -92,11 +109,12 @@ public class MainActivity extends AppCompatActivity implements DialogInterface.O
             while (cursor.moveToNext()) {
                 Log.d(TAG, cursor.toString());
                 String musicName = cursor.getString(cursor.getColumnIndex(MediaStore.Audio.Media.DISPLAY_NAME));
-                musicNames.add(musicName);
+                Uri contentUri = MediaStore.Audio.Media.getContentUri(musicName);
+                musicList.add(new Music(musicName, contentUri));
             }
             cursor.close();
         }
-        mAdapter.setMusicList(musicNames);
+        mAdapter.setMusicList(musicList);
         mAdapter.notifyDataSetChanged();
     }
 
@@ -128,9 +146,5 @@ public class MainActivity extends AppCompatActivity implements DialogInterface.O
                 loadData();
             }
         }
-    }
-
-    class SubClass {
-
     }
 }

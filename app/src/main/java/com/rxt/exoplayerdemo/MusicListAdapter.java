@@ -1,13 +1,15 @@
 package com.rxt.exoplayerdemo;
 
+import android.net.Uri;
 import android.support.annotation.NonNull;
 import android.support.v7.widget.RecyclerView;
-import android.util.TypedValue;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
 
 import java.util.List;
+
+import butterknife.ButterKnife;
 
 /**
  * Desc:
@@ -19,10 +21,21 @@ import java.util.List;
  */
 public class MusicListAdapter extends RecyclerView.Adapter<MusicListAdapter.MusicListHolder> {
 
-    private List<String> musicList;
+    private List<Music> musicList;
 
-    public void setMusicList(List<String> musicList) {
+    public void setMusicList(List<Music> musicList) {
         this.musicList = musicList;
+    }
+
+    public interface OnItemClickListener {
+
+        void onItemClick(Uri musicUri);
+    }
+
+    private OnItemClickListener onItemClickListener;
+
+    public void setOnItemClickListener(OnItemClickListener onItemClickListener) {
+        this.onItemClickListener = onItemClickListener;
     }
 
     @NonNull
@@ -30,15 +43,23 @@ public class MusicListAdapter extends RecyclerView.Adapter<MusicListAdapter.Musi
     public MusicListHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
         TextView textView = new TextView(parent.getContext());
         textView.setPadding(30, 10, 30, 10);
-        textView.setTextSize(TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 12,
-                parent.getResources().getDisplayMetrics()));
+        textView.setTextSize(12);
         textView.setTextColor(parent.getResources().getColor(android.R.color.black));
         return new MusicListHolder(textView);
     }
 
     @Override
     public void onBindViewHolder(@NonNull MusicListHolder holder, int position) {
-        ((TextView)holder.itemView).setText(musicList.get(position));
+        final Music music = musicList.get(position);
+        ((TextView)holder.itemView).setText(music.getName());
+        holder.itemView.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (onItemClickListener != null) {
+                    onItemClickListener.onItemClick(music.getMusicUri());
+                }
+            }
+        });
     }
 
     @Override
@@ -50,6 +71,7 @@ public class MusicListAdapter extends RecyclerView.Adapter<MusicListAdapter.Musi
 
         public MusicListHolder(@NonNull View itemView) {
             super(itemView);
+            ButterKnife.bind(this, itemView);
         }
     }
 }
