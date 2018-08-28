@@ -17,6 +17,19 @@ import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
 import android.util.Log;
 
+import com.google.android.exoplayer2.ExoPlayerFactory;
+import com.google.android.exoplayer2.SimpleExoPlayer;
+import com.google.android.exoplayer2.source.ExtractorMediaSource;
+import com.google.android.exoplayer2.source.MediaSource;
+import com.google.android.exoplayer2.trackselection.AdaptiveTrackSelection;
+import com.google.android.exoplayer2.trackselection.DefaultTrackSelector;
+import com.google.android.exoplayer2.trackselection.TrackSelection;
+import com.google.android.exoplayer2.upstream.BandwidthMeter;
+import com.google.android.exoplayer2.upstream.DataSource;
+import com.google.android.exoplayer2.upstream.DefaultBandwidthMeter;
+import com.google.android.exoplayer2.upstream.DefaultDataSourceFactory;
+import com.google.android.exoplayer2.util.Util;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -31,6 +44,7 @@ public class MainActivity extends AppCompatActivity implements DialogInterface.O
     RecyclerView rvMusicList;
     private MusicListAdapter mAdapter;
     private AlertDialog mPermissionRationaleDialog;
+    private SimpleExoPlayer mSimpleExoPlayer;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -62,6 +76,24 @@ public class MainActivity extends AppCompatActivity implements DialogInterface.O
 
     private void playMusic(Uri musicUri) {
 
+        if (mSimpleExoPlayer == null) {
+            BandwidthMeter bandwidthMeter = new DefaultBandwidthMeter();
+            TrackSelection.Factory videoTrackSelectionFactory =
+                    new AdaptiveTrackSelection.Factory(bandwidthMeter);
+            DefaultTrackSelector trackSelector =
+                    new DefaultTrackSelector(videoTrackSelectionFactory);
+
+            mSimpleExoPlayer = ExoPlayerFactory.newSimpleInstance(getApplicationContext(), trackSelector);
+        }
+
+        mSimpleExoPlayer.release();
+        DataSource.Factory dataSourceFactory = new DefaultDataSourceFactory
+                (getApplicationContext(), Util.getUserAgent(getApplicationContext(), "ExoPlayerDemo"));
+        MediaSource mediaSource = new ExtractorMediaSource.Factory(dataSourceFactory)
+                .createMediaSource(musicUri);
+        mSimpleExoPlayer.prepare(mediaSource);
+
+//        mSimpleExoPlayer
     }
 
     private void checkPermissionNecessary() {
@@ -146,5 +178,11 @@ public class MainActivity extends AppCompatActivity implements DialogInterface.O
                 loadData();
             }
         }
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        mSimpleExoPlayer.release();
     }
 }
