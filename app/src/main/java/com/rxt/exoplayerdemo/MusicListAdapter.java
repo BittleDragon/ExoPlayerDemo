@@ -45,6 +45,8 @@ public class MusicListAdapter extends RecyclerView.Adapter<MusicListAdapter.Musi
         textView.setPadding(30, 10, 30, 10);
         textView.setTextSize(12);
         textView.setTextColor(parent.getResources().getColor(android.R.color.black));
+        int measuredWidth = parent.getMeasuredWidth();
+        textView.setWidth(measuredWidth);
         return new MusicListHolder(textView);
     }
 

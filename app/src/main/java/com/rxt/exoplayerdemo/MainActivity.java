@@ -8,6 +8,7 @@ import android.database.Cursor;
 import android.net.Uri;
 import android.os.Bundle;
 import android.provider.MediaStore;
+import android.support.annotation.Nullable;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AlertDialog;
@@ -17,26 +18,33 @@ import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
 import android.util.Log;
 
+import com.google.android.exoplayer2.ExoPlaybackException;
 import com.google.android.exoplayer2.ExoPlayerFactory;
+import com.google.android.exoplayer2.PlaybackParameters;
+import com.google.android.exoplayer2.Player;
 import com.google.android.exoplayer2.SimpleExoPlayer;
+import com.google.android.exoplayer2.Timeline;
 import com.google.android.exoplayer2.source.ExtractorMediaSource;
-import com.google.android.exoplayer2.source.MediaSource;
+import com.google.android.exoplayer2.source.TrackGroupArray;
 import com.google.android.exoplayer2.trackselection.AdaptiveTrackSelection;
 import com.google.android.exoplayer2.trackselection.DefaultTrackSelector;
 import com.google.android.exoplayer2.trackselection.TrackSelection;
+import com.google.android.exoplayer2.trackselection.TrackSelectionArray;
 import com.google.android.exoplayer2.upstream.BandwidthMeter;
 import com.google.android.exoplayer2.upstream.DataSource;
 import com.google.android.exoplayer2.upstream.DefaultBandwidthMeter;
 import com.google.android.exoplayer2.upstream.DefaultDataSourceFactory;
 import com.google.android.exoplayer2.util.Util;
 
+import java.io.File;
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
 
 import butterknife.BindView;
 import butterknife.ButterKnife;
 
-public class MainActivity extends AppCompatActivity implements DialogInterface.OnClickListener {
+public class MainActivity extends AppCompatActivity implements DialogInterface.OnClickListener, Player.EventListener {
 
     public static final int PERMISSION_REQUEST_READ_EXTERNAL_STORAGE = 1;
     public static final String TAG = "ExoPlayer";
@@ -45,6 +53,9 @@ public class MainActivity extends AppCompatActivity implements DialogInterface.O
     private MusicListAdapter mAdapter;
     private AlertDialog mPermissionRationaleDialog;
     private SimpleExoPlayer mSimpleExoPlayer;
+    private ExtractorMediaSource mediaSource;
+    private DefaultTrackSelector trackSelector;
+    private ExtractorMediaSource.Factory factory;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -78,22 +89,51 @@ public class MainActivity extends AppCompatActivity implements DialogInterface.O
 
         if (mSimpleExoPlayer == null) {
             BandwidthMeter bandwidthMeter = new DefaultBandwidthMeter();
-            TrackSelection.Factory videoTrackSelectionFactory =
+            TrackSelection.Factory trackSelectionFactory =
                     new AdaptiveTrackSelection.Factory(bandwidthMeter);
-            DefaultTrackSelector trackSelector =
-                    new DefaultTrackSelector(videoTrackSelectionFactory);
+            trackSelector = new DefaultTrackSelector(trackSelectionFactory);
 
             mSimpleExoPlayer = ExoPlayerFactory.newSimpleInstance(getApplicationContext(), trackSelector);
+            mSimpleExoPlayer.addListener(this);
+            mSimpleExoPlayer.setPlayWhenReady(true);
+//            mSimpleExoPlayer.setRepeatMode(Player.REPEAT_MODE_ALL);
+
+            DataSource.Factory dataSourceFactory = new DefaultDataSourceFactory
+                    (getApplicationContext(), Util.getUserAgent(getApplicationContext(), "ExoPlayerDemo"));
+            factory = new ExtractorMediaSource.Factory(dataSourceFactory);
+            mediaSource = factory.createMediaSource(musicUri);
+            mSimpleExoPlayer.prepare(mediaSource);
+        } else {
+            if (mSimpleExoPlayer.getPlaybackState() == Player.STATE_IDLE) {
+                mSimpleExoPlayer.setPlayWhenReady(true);
+                mediaSource = factory.createMediaSource(musicUri);
+                mSimpleExoPlayer.prepare(mediaSource);
+            } else if (mSimpleExoPlayer.getPlaybackState() == Player.STATE_READY) {
+                Class<ExtractorMediaSource> clazz = ExtractorMediaSource.class;
+                Field uriField = null;
+                try {
+                    uriField = clazz.getDeclaredField("uri");
+                    uriField.setAccessible(true);
+                    if (uriField.getType().equals(Uri.class)) {
+                        Uri uri = (Uri) uriField.get(mediaSource);
+                        if (musicUri != uri) {
+                            mSimpleExoPlayer.setPlayWhenReady(true);
+                            mediaSource = factory.createMediaSource(musicUri);
+                            mSimpleExoPlayer.prepare(mediaSource);
+                        } else {
+                            mSimpleExoPlayer.setPlayWhenReady(!mSimpleExoPlayer.getPlayWhenReady());
+                        }
+                    }
+                } catch (NoSuchFieldException e) {
+                    e.printStackTrace();
+                } catch (IllegalAccessException e) {
+                    e.printStackTrace();
+                }
+            } else if (mSimpleExoPlayer.getPlaybackState() == Player.STATE_ENDED) {
+                mSimpleExoPlayer.setPlayWhenReady(true);
+                mSimpleExoPlayer.seekTo(0);
+            }
         }
-
-        mSimpleExoPlayer.release();
-        DataSource.Factory dataSourceFactory = new DefaultDataSourceFactory
-                (getApplicationContext(), Util.getUserAgent(getApplicationContext(), "ExoPlayerDemo"));
-        MediaSource mediaSource = new ExtractorMediaSource.Factory(dataSourceFactory)
-                .createMediaSource(musicUri);
-        mSimpleExoPlayer.prepare(mediaSource);
-
-//        mSimpleExoPlayer
     }
 
     private void checkPermissionNecessary() {
@@ -141,7 +181,8 @@ public class MainActivity extends AppCompatActivity implements DialogInterface.O
             while (cursor.moveToNext()) {
                 Log.d(TAG, cursor.toString());
                 String musicName = cursor.getString(cursor.getColumnIndex(MediaStore.Audio.Media.DISPLAY_NAME));
-                Uri contentUri = MediaStore.Audio.Media.getContentUri(musicName);
+                String musicPath = cursor.getString(cursor.getColumnIndex(MediaStore.Audio.Media.DATA));
+                Uri contentUri = Uri.fromFile(new File(musicPath));
                 musicList.add(new Music(musicName, contentUri));
             }
             cursor.close();
@@ -183,6 +224,61 @@ public class MainActivity extends AppCompatActivity implements DialogInterface.O
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        mSimpleExoPlayer.release();
+        if (mSimpleExoPlayer != null) {
+            mSimpleExoPlayer.release();
+            trackSelector = null;
+            mediaSource = null;
+            mSimpleExoPlayer = null;
+        }
+    }
+
+    @Override
+    public void onTimelineChanged(Timeline timeline, @Nullable Object manifest, int reason) {
+        String s;
+    }
+
+    @Override
+    public void onTracksChanged(TrackGroupArray trackGroups, TrackSelectionArray trackSelections) {
+        String s;
+    }
+
+    @Override
+    public void onLoadingChanged(boolean isLoading) {
+        String s;
+    }
+
+    @Override
+    public void onPlayerStateChanged(boolean playWhenReady, int playbackState) {
+        String s;
+    }
+
+    @Override
+    public void onRepeatModeChanged(int repeatMode) {
+        String s;
+    }
+
+    @Override
+    public void onShuffleModeEnabledChanged(boolean shuffleModeEnabled) {
+        String s;
+    }
+
+    @Override
+    public void onPlayerError(ExoPlaybackException error) {
+        String s;
+    }
+
+    @Override
+    public void onPositionDiscontinuity(int reason) {
+        String s;
+    }
+
+    @Override
+    public void onPlaybackParametersChanged(PlaybackParameters playbackParameters) {
+        String s;
+    }
+
+    @Override
+    public void onSeekProcessed() {
+        String s;
     }
 }
